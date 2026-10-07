@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import hmac
 import os
 import sys
 from pathlib import Path
@@ -156,8 +157,9 @@ def parse_date(series: pd.Series) -> pd.Series:
 
 
 def pseudonymize(series: pd.Series, salt: str) -> pd.Series:
+    key = salt.encode("utf-8")
     return series.map(
-        lambda v: hashlib.sha256(f"{salt}{v}".encode("utf-8")).hexdigest()[:16]
+        lambda v: hmac.new(key, v.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
     )
 
 
@@ -203,12 +205,12 @@ def hospital_mapping() -> Mapping:
 def episode_mapping(salt: str) -> Mapping:
     mapping: Mapping = {
         "patient_id": (
-            "SHA-256(HOSPITAL|HISTORIA)",
+            "HMAC-SHA256(HOSPITAL|HISTORIA)",
             lambda d: pseudonymize(patient_key(d), salt),
         ),
         "cnh_cd": ("HOSPITAL", lambda d: d["HOSPITAL"]),
         "episode_id": (
-            "SHA-256(HOSPITAL|HISTORIA|FECING|FECALT)",
+            "HMAC-SHA256(HOSPITAL|HISTORIA|FECING|FECALT)",
             lambda d: pseudonymize(patient_key(d) + "|" + d["FECING"] + "|" + d["FECALT"], salt),
         ),
         "age_nm": (
@@ -321,7 +323,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--salt",
         default=os.environ.get("IQVIA_PSEUDO_SALT", ""),
-        help="Sal para pseudonimizar patient_id/episode_id (o variable IQVIA_PSEUDO_SALT)",
+        help="Clave secreta (HMAC) para pseudonimizar patient_id/episode_id (o variable IQVIA_PSEUDO_SALT)",
     )
     return parser.parse_args(argv)
 
@@ -332,7 +334,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     schema = read_model_schema(args.model)
     mappings = entity_mappings(args.salt)
     if not args.salt:
-        print("[AVISO] Sin --salt: patient_id/episode_id se pseudonimizan sin sal.")
+        print(
+            "[AVISO] Sin --salt: patient_id/episode_id se calculan sin clave secreta y "
+            "podrían revertirse por fuerza bruta. Indique --salt o IQVIA_PSEUDO_SALT."
+        )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for entity in ENTITIES:

@@ -24,7 +24,7 @@ Argumentos opcionales:
 | `--model` | `common_datamodel.xlsx` | Plantilla CDM |
 | `--output-dir` | `output/` | Carpeta de salida |
 | `--sep` | `;` | Separador de los CSV de salida |
-| `--salt` | variable `IQVIA_PSEUDO_SALT` o vacío | Sal para pseudonimizar `patient_id` / `episode_id` |
+| `--salt` | variable `IQVIA_PSEUDO_SALT` o vacío | Clave secreta (HMAC) para pseudonimizar `patient_id` / `episode_id` |
 
 Ejemplo: `python scripts/combine_iqvia_to_model.py --csv "IQVIA 1T2025 H.csv" --salt "mi-secreto"`
 
@@ -59,7 +59,7 @@ Ejemplo: `python scripts/combine_iqvia_to_model.py --csv "IQVIA 1T2025 H.csv" --
 
 | Columna CDM | Origen IQVIA | Notas |
 |-------------|--------------|-------|
-| `patient_id` | `HOSPITAL` + `HISTORIA` | Pseudonimizado: SHA-256 (16 primeros caracteres hex) con sal opcional |
+| `patient_id` | `HOSPITAL` + `HISTORIA` | Pseudonimizado: HMAC-SHA256 con la clave `--salt` (16 primeros caracteres hex) |
 | `cnh_cd` | `HOSPITAL` | |
 | `episode_id` | `HOSPITAL` + `HISTORIA` + `FECING` + `FECALT` | Pseudonimizado igual que `patient_id` (`EPISODIO` viene vacío, `-`) |
 | `age_nm` | `FECNAC`, `FECINT1` (o `FECING`) | Años cumplidos a la fecha de intervención; si no hay, a la de ingreso |
@@ -91,7 +91,9 @@ pseudonimizado (`HOSPITAL|HISTORIA` + misma sal).
 ### Advertencias
 
 - No se aplican los criterios de inclusión/exclusión de cohorte (`cohort_definition_*`): se exportan todos los episodios.
-- Sin `--salt` los identificadores se calculan sin sal; se recomienda indicar una sal secreta
-  (y usar siempre la misma para que los identificadores coincidan entre entidades y ejecuciones).
+- Sin `--salt` los identificadores se calculan sin clave secreta y podrían revertirse por fuerza bruta
+  (los números de historia son predecibles). Indica siempre una clave secreta, guárdala fuera del repositorio
+  y usa siempre la misma para que los identificadores coincidan entre entidades y ejecuciones.
+  Los CSV de `output/` del repositorio se generaron sin clave (el CSV de origen, con `CIP`, ya está en el repositorio).
 - Para ajustar el mapeo, edita las funciones `hospital_mapping()` / `episode_mapping()` /
   `entity_mappings()` del script.
